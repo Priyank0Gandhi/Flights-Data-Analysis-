@@ -1,0 +1,389 @@
+---
+title: "Data Analysis Project"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE,
+                      comment = "")
+```
+
+# Introduction
+dataset of all domestic outbound flights from Dulles International Airport in 2016.
+
+Airports depend on accurate flight departure and arrival estimates to maintain operations, profitability, customer satisfaction, and compliance with state and federal laws. Flight performance, including departure and arrival delays must be monitored, submitted to the Federal Aviation Agency (FAA) on a regular basis, and minimized to maintain airport operations. **The FAA considered a flight to be delayed if it has an arrival delay of at least 15 minutes**.
+
+
+## Dulles Flights Data
+
+The `flights_df` data frame is loaded below and consists of 33,433 flights from IAD (Dulles International) in 2016. The rows in this data frame represent a single flight with all of the associated features that are displayed in the table below.
+
+
+
+```{r}
+
+library(tidyverse)
+library(tidyr)
+library(skimr)
+library(corrplot)
+library(ggplot2)
+
+flights_df
+
+```
+
+
+### Raw Data Climate
+
+```{r}
+
+flights_df
+climate_df
+climate_df$scheduled_flight_date<- as.Date(climate_df$scheduled_flight_date)
+
+
+climate_df["New.Snow"][climate_df["New.Snow"] == "T"] <- 0.005
+climate_df["Snow.Depth"][climate_df["Snow.Depth"] == "T"] <- 0.005
+climate_df["Precipitation"][climate_df["Precipitation"] == "T"] <- 0.005
+climate_df$New.Snow<- as.numeric(climate_df$New.Snow)
+climate_df$Snow.Depth<- as.numeric(climate_df$Snow.Depth)
+climate_df$Precipitation<- as.numeric(climate_df$Precipitation)
+
+final_df<-left_join(flights_df,climate_df, by = "scheduled_flight_date")
+final_df <- 
+  final_df%>% 
+  mutate(Early_Arrivals = case_when(arrival_delay < 0 ~ -(arrival_delay), arrival_delay  >=0 ~ 0))
+
+final_df<- 
+  final_df%>% 
+  mutate(arrival_delays = case_when(arrival_delay >= 0 ~ arrival_delay, arrival_delay < 0 ~ 0))
+
+final_df<- 
+  final_df%>% 
+  mutate(dep_delays = case_when(dep_delay >= 0 ~ dep_delay, dep_delay < 0 ~ 0))
+
+final_df<-
+  final_df%>% 
+  mutate(early_dep = case_when(dep_delay < 0 ~ -(dep_delay), dep_delay  >=0 ~ 0))
+colnames(final_df)[27]<-"Early_Arrivals"
+colnames(final_df)[28]<-"arrival_delays"
+
+f1<-
+  final_df%>% 
+  mutate(delay_status = case_when(arrival_delays >=15 ~ "Delay", arrival_delays < 15 ~ "no_delay"))
+```
+
+
+# Exploratory Data Analysis
+
+
+## Question 1
+
+
+
+**Question**: What Particular months of the year has the highest no. of flight arrival delays in proportion to the total no. of flights taking off in those months?
+
+
+
+**Answer**: December has Highest no. of Flight delays out of all the flights that took off in December. Followed by that is the month of July, and then June.
+
+```{r}
+a<-final_df%>% count(month,sort=F)
+c<- f1%>% group_by(month)%>%count(delay_status)
+b<- c%>% group_by(month)%>%filter(delay_status=="Delay")
+d<- left_join(a,b,by="month" )
+colnames(d)[2]<-"Total_Flights"
+colnames(d)[4]<-"Delayed_flights"
+d<-d%>%mutate("perc_Flights_delayed"=(Delayed_flights/Total_Flights)*100)%>% arrange(desc(perc_Flights_delayed))
+as.tibble(d)
+
+ggplot(data = d, mapping = aes(y =month,x=perc_Flights_delayed, fill=month)) +
+  geom_col(color="black") + 
+  labs(title = "Flights Delayed Monthly",
+       y = "Month",
+       x = "% of Flights Delayed",
+       fill="Months")
+
+
+
+```
+
+
+
+## Question 2
+
+
+
+**Question**:Which days of the week have the highest no. of flight arrival delays in proportion to the total no. of flights taking off in the week?
+
+
+
+**Answer**: Looking at the bar graph below, Thursday seems to be holding the highest no. of Flight delay percentage out of all the weekdays. On the second position is Monday. Saturday holds the least no. of flight delay percentages.
+
+
+```{r}
+a1<-final_df%>% count(weekday)
+c1<-f1%>% group_by(weekday)%>%count(delay_status)
+b1<- c1%>% group_by(weekday)%>%filter(delay_status=="Delay")
+d1<- left_join(a1,b1,by="weekday" )
+colnames(d1)[2]<-"Total_Flights"
+colnames(d1)[4]<-"Delayed_flights"
+d1<-d1%>%mutate("perc_Flights_delayed"=(Delayed_flights/Total_Flights)*100)%>% arrange(desc(perc_Flights_delayed))
+as.tibble(d1)
+
+ggplot(data = d1, mapping = aes(y = weekday,x=perc_Flights_delayed, fill=weekday)) +
+  geom_col(color="black") + 
+  labs(title = "Flights Delayed on Weekdays",
+       y = "Weekday",
+       x = "% of Flights Delayed",
+       fill="Weekdays")
+
+
+
+```
+
+
+
+## Question 3
+
+
+
+**Question**: Are there certain days in a month having more flight arrival delays in proportion to the total no. of flights taking off on that day?
+
+
+
+**Answer**: Yes, the 15th day of a month is most prone to flight delays, followed by the 16th day which is almost equally prone. All in all, mid of the month is more susceptible to delays in the arrival of flights.
+
+
+
+
+```{r}
+f1$day<- as.factor(f1$day)
+a3<-final_df%>% count(day)
+a3$day<- as.factor(a3$day)
+c3<-f1%>% group_by(day)%>%count(delay_status)
+b3<- c3%>% group_by(day)%>%filter(delay_status=="Delay")
+d3<- left_join(a3,b3,by="day" )
+colnames(d3)[2]<-"Total_Flights"
+colnames(d3)[4]<-"Delayed_flights"
+d3<-d3%>%mutate("perc_Flights_delayed"=(Delayed_flights/Total_Flights)*100)%>% arrange(desc(perc_Flights_delayed))
+as.tibble(d3)
+
+ggplot(data = d3,aes(x=day,y=perc_Flights_delayed, group=1)) +
+  geom_line()+
+  geom_point(aes(binwidth=NULL), colour="red")+
+  labs(title = "Daily Proportion of Flights Delayed",
+       x = "Days",
+       y = "% of Flights Delayed",
+       fill="Days")
+
+
+
+```
+
+
+
+
+## Question 4
+
+
+
+**Question**: What particular destination airports are more prone to delays?
+
+
+
+**Answer**: Portland Jetport the one where the flight delay percentages are highest. Followed by that is the Newark Liberty airport.
+
+
+
+
+```{r}
+a4<-final_df%>% count(dest_airport_name)
+c4<-f1%>% group_by(dest_airport_name)%>%count(delay_status)
+b4<- c4%>% group_by(dest_airport_name)%>%filter(delay_status=="Delay", n>1)
+d4<- left_join(b4,a4, by="dest_airport_name" )
+colnames(d4)[4]<-"Total_Flights"
+colnames(d4)[3]<-"Delayed_flights"
+d4<-d4%>%mutate("perc_Flights_delayed"=(Delayed_flights/Total_Flights)*100)%>% arrange(desc(perc_Flights_delayed))
+as.tibble(d4)
+
+ggplot(data = d4, mapping = aes(y =reorder(dest_airport_name,perc_Flights_delayed) ,x= perc_Flights_delayed, fill=dest_airport_name)) +
+  geom_col(color="black") + 
+  labs(title = "Flight Delays at Destination Airports",
+       y = "Destination Airport",
+       x = "% of Flights Delayed",
+       fill="")+
+  theme(legend.position="none")
+
+
+
+```
+
+
+
+
+## Question 5
+
+
+
+**Question**: Which Airlines have more delays compared to other airlines?
+
+
+
+**Answer**: The bar chart below depicts that the "Frontier Airlines" have highest Flight Arrival Delay Percentages, an the least no. of Flight delay percentages are associated with Alaska Airlines.
+
+
+
+
+```{r}
+a2<-final_df%>% count(airline)
+c2<-f1%>% group_by(airline)%>%count(delay_status)
+b2<- c2%>% group_by(airline)%>%filter(delay_status=="Delay")
+d2<- left_join(a2,b2,by="airline" )
+colnames(d2)[2]<-"Total_Flights"
+colnames(d2)[4]<-"Delayed_flights"
+d2<-d2%>%mutate("perc_Flights_delayed"=(Delayed_flights/Total_Flights)*100)%>% arrange(desc(perc_Flights_delayed))
+as.tibble(d2)
+
+ggplot(data = d2, mapping = aes(y = reorder(airline, perc_Flights_delayed,),x=perc_Flights_delayed, fill=airline)) +
+  geom_col(color="black") + 
+  labs(title = "Flights Delays by Airlines",
+       y = "Airline",
+       x = "% of Flights Delayed",
+       fill="Airlines")
+
+
+
+```
+
+
+## Question 6
+
+
+
+**Question**: Which Airlines have highest average taxi-out times increasing the runway traffic?
+
+
+**Answer**: The Dot plot below shows that the "Frontier Airlines" has the highest Average Taxi out times which leads to increasing Runway Traffic which in turn causes the flight to arrive late at the destination.
+
+
+
+
+```{r}
+ggplot(data = f1, mapping = aes(x = taxi_out)) +
+  geom_boxplot(fill = "#006EA1") +
+  labs(title = "Boxplot of taxi_out", x = "Taxi Out Time",
+       y = "")
+summary(f1$arrival_delays)
+
+to<- f1%>%group_by(airline)%>%count(airline)
+to1<-f1%>% group_by(airline)%>%filter(taxi_out<=35)%>%summarise(mean(taxi_out))
+colnames(to1)[2]<-"mean_taxi_out"
+to2<- left_join(to,to1, by="airline")
+dt1<-f1%>%filter(taxi_out<=35)
+as.tibble(dt1)
+
+ggplot(data = to2, mapping = aes(x= mean_taxi_out ,y=reorder(airline,mean_taxi_out))) +
+  geom_point(colour="black",size=3.5)+
+  geom_point(aes(colour=airline),size=2)+
+  labs(title = "Average Taxi-out Times of Airlines",
+       y = "Airlines",
+       x = "Avg Taxi-out Times",
+       colour="Airlines")
+
+
+
+```
+
+
+## Question 7
+
+
+
+**Question**: Are flight arrival delays affected by taxi-out time and the departure delays?
+
+
+
+**Answer**: Below is the Heatmap, which shows the correlation between different factors affecting the flight arrival delays. The factor that affects the most is the Departure delay of the flights from the Source Airport, and the next thing that shows some correlation with arrival delay is the Taxi-out time, although it is not that significant, but is higher than other factors.
+
+
+
+```{r}
+vars <- dplyr::select(final_df,`arrival_delays`,everything(), -c(scheduled_flight_date,arrival_time, sch_arrival_time,Early_Arrivals, arrival_delay, month_numeric, flight_num, early_dep,dep_delay,sch_dep_time, dep_time))
+
+
+corrplot(cor(vars[sapply(vars, function(x) !is.factor(x))]),type="lower", method="color",diag=F,tl.srt=50, addCoef.col="black", main="Heat Map", tl.cex =0.7, number.cex = 0.75, mar=c(0,0,1,0))
+
+```
+
+
+
+## Question 8
+
+
+
+**Question**: Are Certain Airport regions more susceptible to delays?
+
+
+
+**Answer**: Yes, Airports in the Northeast regions are more prone to delays, and the airports situated in the southern region are least prone to arrival delays.
+
+
+
+
+```{r}
+a5<-final_df%>% count(dest_airport_region)
+c5<-f1%>% group_by(dest_airport_region)%>%count(delay_status)
+b5<- c5%>% group_by(dest_airport_region)%>%filter(delay_status=="Delay")
+d5<- left_join(a5,b5,by="dest_airport_region" )
+colnames(d5)[2]<-"Total_Flights"
+colnames(d5)[4]<-"Delayed_flights"
+d5<-d5%>%mutate("perc_Flights_delayed"=(Delayed_flights/Total_Flights)*100)%>% arrange(desc(perc_Flights_delayed))
+as.tibble(d5)
+
+ggplot(data = d5, mapping = aes(y = reorder(dest_airport_region, perc_Flights_delayed,),x=perc_Flights_delayed, fill=dest_airport_region)) +
+  geom_col(color="black") + 
+  labs(title = "Flights Delays by Regions",
+       y = "airport region",
+       x = "% of Flights Delayed",
+       fill="Region")
+
+
+```
+
+
+## Executive Summary
+1.) Introduction:
+The Executives of Dulles International Airport have seen that the Flight Delays play an important role in the profitability, operations, customer satisfaction 
+of the airport. And it is necessary to keep track of the delays and the factors affecting the delay as it will enables the executives to run the airport operations more smoothly and effectively to increase profits and customer satisfaction.
+
+The Goal of this analysis is to see what factors are affecting the flight arrival delays and to what extent. This analysis would enable us to know what causes a delay, where does it cause the delaying of flight, when does it cause a delay, so that effective recommendations can be made.
+
+2.) Highlights and Key Findings:
+
+Flights those arrive at the destination airport at least 15 minutes late than the scheduled arrival time are considered to be delayed. So considering that, it is seen that the most monthly delays in proportion to the no. of flights taking off in that particular month have occurred during the month of December which is 24.2%. 
+And the lowest is found to be in the month of November i.e., 9.2%. Further, it was found that the weekday which has the highest percentage of flight arrival delay in proportion to the total flights taking off on that day is Thursday having 17.8% flights getting delayed. Moreover, the days of the month were also analysed to know the trend of flight arrival delays throughout the month. So, it is seen that, mid of the months were more prone to flights arrival delays as compared to any other day, 15th and the 16th day don't show a significant difference, 15th day being the highest.
+
+Additionally, it is seen that the destination airport region more prone to delays is the Northeast region where 18.5% of Flights arrive late out of all the flights flown to that region. This leads us to think of the Destination airports facing arrival delays, and "Portland Jetport" is more susceptible to arrival delays than any other airport. And looking at the data, it can be seen that "Portland Jetport" falls in the Northeast region itself.
+
+Furthermore, the Airlines also play a major factor in determining flight arrival delays, and from the analysis it is found that "Frontier Airlines" faced highest arrival delay percentages i.e., 27.02%. The factors that affected the arrival delays were also analyzed and it was found that departure delays affected the most i.e. it showed the correlation of 0.96 with arrival delay. While there were no other significant correlations seen, correlation between taxi_out and arrival delays(0.28), though smaller, was seen. Also, considering climate as one factor, a small correlation was seen between Precipitation and Arrival Delays(0.16).Traffic at runway is also a big concern that increases further delay, and it was seen that "United and "American" Airlines were associated with the highest average taxi_out times in minutes.
+
+
+3.) Recommendations:
+
+Firstly, considering the monthly Delays, highest delays were seen in the Months of December and July. The possible reason for the delays in those months would be due to high precipitations.So considering this factor, preparations can be made by the airports to monitor the weather forecasting thoroughly and schedule the flights accordingly.
+
+Secondly, December is considered as a holiday season, hence, more people travel during this month. To minimize the delays, one of the recommendations would be making security check process more fast and streamlined, if there is a need, put more employees, in this process to get the work done.
+Now, coming to the weekly delays, Thursdays and Mondays have highest delays, this may be due to the working class people travelling to and from their work on those days, increasing the congestion in the airports, resulting into higher check in times. This can be reduced by properly managing the distributions of employees and check in counters and increasing the queues for check in for those days.
+
+Frontier Airlines and Skywest Airlines have the highest average Taxi-out times, to which, one of my recommendation would be to improve the flight operations and get rid of the Taxi checklist to let the pilots focus on taxiing efficiently.
+
+
+
+
+
+
+
+
