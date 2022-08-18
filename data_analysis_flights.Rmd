@@ -110,6 +110,8 @@ ggplot(data = d, mapping = aes(y =month,x=perc_Flights_delayed, fill=month)) +
 
 ```
 
+![image](https://user-images.githubusercontent.com/96395339/185453981-ed8cab50-c16b-409e-b892-a244be80457d.png)
+
 
 
 ## Question 2
